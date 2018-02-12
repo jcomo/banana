@@ -34,20 +34,10 @@ type FrontMatter struct {
 }
 
 type FrontMatterParser interface {
-	IsStart(string) bool
-	IsEnd(string) bool
-	Parse([]byte) (*FrontMatter, error)
+	Parse(raw []byte) (*FrontMatter, error)
 }
 
 type YAMLFrontMatterParser struct{}
-
-func (p *YAMLFrontMatterParser) IsStart(line string) bool {
-	return line == "---"
-}
-
-func (p *YAMLFrontMatterParser) IsEnd(line string) bool {
-	return line == "---"
-}
 
 func (p *YAMLFrontMatterParser) Parse(raw []byte) (*FrontMatter, error) {
 	meta := new(FrontMatter)
@@ -83,16 +73,16 @@ func parse(filename string) (*Post, error) {
 }
 
 func parseFrontMatter(r *bufio.Reader) (*FrontMatter, error) {
-	p := &YAMLFrontMatterParser{}
-
 	var buf bytes.Buffer
 	line, err := r.ReadString('\n')
 	if err != nil {
 		return nil, err
 	}
 
-	if !p.IsStart(strings.Trim(line, "\r\n")) {
-		return nil, errors.New("Expected start of front matter")
+	delimiter := strings.Trim(line, "\r\n")
+	parser, ok := parsers[delimiter]
+	if !ok {
+		return nil, errors.New("Invalid front matter delimiter")
 	}
 
 	for {
@@ -101,14 +91,14 @@ func parseFrontMatter(r *bufio.Reader) (*FrontMatter, error) {
 			return nil, err
 		}
 
-		if p.IsEnd(strings.Trim(line, "\r\n")) {
+		if strings.Trim(line, "\r\n") == delimiter {
 			break
 		}
 
 		buf.WriteString(line)
 	}
 
-	fm, err := p.Parse(buf.Bytes())
+	fm, err := parser.Parse(buf.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -146,6 +136,14 @@ func (p *Post) AsContext() *PostContext {
 	return &PostContext{
 		Title:   p.Title,
 		Content: template.HTML(markdown),
+	}
+}
+
+var parsers map[string]FrontMatterParser
+
+func init() {
+	parsers = map[string]FrontMatterParser{
+		"---": &YAMLFrontMatterParser{},
 	}
 }
 
