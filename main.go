@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"fmt"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"os"
+	"path"
+	"regexp"
 	"strings"
 
 	"gopkg.in/russross/blackfriday.v2"
@@ -26,6 +28,12 @@ func upper(value string) string {
 type Post struct {
 	FrontMatter
 	Content []byte
+}
+
+func (p *Post) Slug() string {
+	re := regexp.MustCompile("[\\W]+")
+	title := strings.ToLower(p.Title)
+	return re.ReplaceAllLiteralString(title, "-")
 }
 
 type FrontMatter struct {
@@ -127,6 +135,7 @@ type SiteContext struct {
 }
 
 type PostContext struct {
+	Slug    string
 	Title   string
 	Content template.HTML
 }
@@ -134,6 +143,7 @@ type PostContext struct {
 func (p *Post) AsContext() *PostContext {
 	markdown := blackfriday.Run(p.Content)
 	return &PostContext{
+		Slug:    p.Slug(),
 		Title:   p.Title,
 		Content: template.HTML(markdown),
 	}
@@ -147,30 +157,156 @@ func init() {
 	}
 }
 
-func main() {
-	p, err := parse("example/site/posts/example.md")
-	if err != nil {
-		panic(err.Error())
-	}
-	fmt.Println(p)
+type engine struct {
+	baseDir string
+	site    *SiteContext
+	posts   []*Post
+}
 
+func NewEngine(baseDir string) (*engine, error) {
+	dir := path.Join(baseDir, "site")
+	postsDir := path.Join(dir, "posts")
+
+	site := &SiteContext{Name: "Test Site"}
+	fs, err := ioutil.ReadDir(postsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	ps := make([]*Post, len(fs))
+	for i, f := range fs {
+		p, err := parse(path.Join(postsDir, f.Name()))
+		if err != nil {
+			return nil, err
+		}
+
+		ps[i] = p
+	}
+
+	return &engine{
+		baseDir: dir,
+		site:    site,
+		posts:   ps,
+	}, nil
+}
+
+func (e *engine) context(p *Post) GlobalContext {
+	pcs := make([]*PostContext, len(e.posts))
+	for i, p := range e.posts {
+		pcs[i] = p.AsContext()
+	}
+
+	var postContext *PostContext
+	if p != nil {
+		postContext = p.AsContext()
+	}
+
+	return GlobalContext{
+		Site:  e.site,
+		Posts: pcs,
+		Post:  postContext,
+	}
+}
+
+func (e *engine) path(name string) string {
+	return path.Join(e.baseDir, name)
+}
+
+func (e *engine) postPath(name string) string {
+	return path.Join(e.baseDir, "posts", name)
+}
+
+func (e *engine) layoutPath(name string) string {
+	return path.Join(e.baseDir, "layouts", name+".tmpl")
+}
+
+func (e *engine) Template(layout string) (*template.Template, error) {
 	funcs := map[string]interface{}{
 		"upper": upper,
 	}
 
-	ctx := GlobalContext{
-		Site: &SiteContext{Name: "Test Site"},
-		Post: p.AsContext(),
-		Posts: []*PostContext{
-			p.AsContext(),
-		},
-	}
-	t, _ := template.New("page").Funcs(funcs).ParseFiles(
-		"example/site/index.tmpl",
-		"example/site/content.tmpl",
+	return template.New("layout").Funcs(funcs).ParseFiles(
+		e.layoutPath("default"),
+		layout,
 	)
-	err = t.Execute(os.Stdout, ctx)
+}
+
+func (e *engine) writeIndex() error {
+	t, err := e.Template(e.path("index.tmpl"))
 	if err != nil {
-		fmt.Println(err.Error())
+		return err
+	}
+
+	err = os.MkdirAll("out", 0755)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create("out/index.html")
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	err = t.Execute(f, e.context(nil))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (e *engine) writePost(p *Post) error {
+	t, err := e.Template(e.layoutPath(p.Layout))
+	if err != nil {
+		return err
+	}
+
+	dir := path.Join("out", "posts", p.Slug())
+	err = os.MkdirAll(dir, 0755)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create(path.Join(dir, "index.html"))
+	if err != nil {
+		return err
+	}
+
+	defer f.Close()
+
+	err = t.Execute(f, e.context(p))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+func (e *engine) run() error {
+	err := e.writeIndex()
+	if err != nil {
+		return err
+	}
+
+	for _, p := range e.posts {
+		err = e.writePost(p)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func main() {
+	e, err := NewEngine("example")
+	if err != nil {
+		panic(err)
+	}
+
+	err = e.run()
+	if err != nil {
+		panic(err)
 	}
 }
