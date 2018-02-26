@@ -169,10 +169,9 @@ func NewSiteContext(s *Site) *SiteContext {
 
 func NewPageContext(p *Page) *PageContext {
 	slug := p.Slug()
-	opt := blackfriday.WithExtensions(blackfriday.CommonExtensions)
-	markdown := blackfriday.Run(p.Content, opt)
+	markdown := blackfriday.Run(p.Content)
 	return &PageContext{
-		URL:     "/posts/" + slug, // FIXME
+		URL:     "/" + slug,
 		Slug:    slug,
 		Title:   p.Title,
 		Date:    p.Date,
@@ -311,7 +310,7 @@ func (e *engine) writePost(p *Page) error {
 		return err
 	}
 
-	dir := path.Join("out", "posts", p.Slug())
+	dir := path.Join("out", p.Slug())
 	err = os.MkdirAll(dir, 0755)
 	if err != nil {
 		return err
