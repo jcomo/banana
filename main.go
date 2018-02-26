@@ -35,14 +35,34 @@ func date(format string, t *time.Time) string {
 	return t.Format(format)
 }
 
-// TODO
 func stripHtml(value template.HTML) string {
-	return string(value)
+	re := regexp.MustCompile("</?[^>]*>")
+	return re.ReplaceAllLiteralString(string(value), "")
 }
 
-// TODO
-func truncateWords(len int, value string) string {
-	return value
+func truncateWords(len int, value string) (string, error) {
+	s := bufio.NewScanner(strings.NewReader(value))
+	s.Split(bufio.ScanWords)
+
+	i := 0
+	words := make([]string, len)
+	for i < len {
+		if !s.Scan() {
+			err := s.Err()
+			if err == nil {
+				// EOF
+				break
+			}
+
+			return "", err
+		}
+
+		words[i] = s.Text()
+		i += 1
+	}
+
+	res := strings.Join(words, " ")
+	return res, nil
 }
 
 type Page struct {
@@ -155,6 +175,7 @@ type SiteContext struct {
 	Name        string
 	Description string
 	Author      string
+	Time        time.Time
 	Vars        map[string]interface{}
 }
 
@@ -196,7 +217,11 @@ func NewEngine(baseDir string) (*engine, error) {
 	dir := path.Join(baseDir, "site")
 	postsDir := path.Join(dir, "posts")
 
-	site := &SiteContext{Name: "Test Site"}
+	site := &SiteContext{
+		Name: "Test Site",
+		Time: time.Now(),
+	}
+
 	fs, err := ioutil.ReadDir(postsDir)
 	if err != nil {
 		return nil, err
