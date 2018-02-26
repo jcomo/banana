@@ -11,7 +11,9 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"time"
 
+	"github.com/jcomo/banana/copy"
 	"gopkg.in/russross/blackfriday.v2"
 	"gopkg.in/yaml.v2"
 )
@@ -25,20 +27,39 @@ func upper(value string) string {
 	return value + "SDIANSDKANS"
 }
 
-type Post struct {
+func static(value string) string {
+	return "/static/" + value
+}
+
+func date(format string, t *time.Time) string {
+	return t.Format(format)
+}
+
+// TODO
+func stripHtml(value template.HTML) string {
+	return string(value)
+}
+
+// TODO
+func truncateWords(len int, value string) string {
+	return value
+}
+
+type Page struct {
 	FrontMatter
 	Content []byte
 }
 
-func (p *Post) Slug() string {
+func (p *Page) Slug() string {
 	re := regexp.MustCompile("[\\W]+")
 	title := strings.ToLower(p.Title)
 	return re.ReplaceAllLiteralString(title, "-")
 }
 
 type FrontMatter struct {
-	Layout string `yaml:"layout"`
-	Title  string `yaml:"title"`
+	Layout string     `yaml:"layout"`
+	Title  string     `yaml:"title"`
+	Date   *time.Time `yaml:"date"`
 }
 
 type FrontMatterParser interface {
@@ -57,7 +78,7 @@ func (p *YAMLFrontMatterParser) Parse(raw []byte) (*FrontMatter, error) {
 	return meta, nil
 }
 
-func parse(filename string) (*Post, error) {
+func parse(filename string) (*Page, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
@@ -74,7 +95,7 @@ func parse(filename string) (*Post, error) {
 		return nil, err
 	}
 
-	return &Post{
+	return &Page{
 		FrontMatter: *fm,
 		Content:     content,
 	}, nil
@@ -126,25 +147,33 @@ func parseContent(r *bufio.Reader) ([]byte, error) {
 
 type GlobalContext struct {
 	Site  *SiteContext
-	Post  *PostContext
-	Posts []*PostContext
+	Page  *PageContext
+	Posts []*PageContext
 }
 
 type SiteContext struct {
-	Name string
+	Name        string
+	Description string
+	Author      string
+	Vars        map[string]interface{}
 }
 
-type PostContext struct {
+type PageContext struct {
+	URL     string
 	Slug    string
+	Date    *time.Time
 	Title   string
 	Content template.HTML
 }
 
-func (p *Post) AsContext() *PostContext {
+func (p *Page) AsContext() *PageContext {
+	slug := p.Slug()
 	markdown := blackfriday.Run(p.Content)
-	return &PostContext{
-		Slug:    p.Slug(),
+	return &PageContext{
+		URL:     "/posts/" + slug, // FIXME
+		Slug:    slug,
 		Title:   p.Title,
+		Date:    p.Date,
 		Content: template.HTML(markdown),
 	}
 }
@@ -160,7 +189,7 @@ func init() {
 type engine struct {
 	baseDir string
 	site    *SiteContext
-	posts   []*Post
+	posts   []*Page
 }
 
 func NewEngine(baseDir string) (*engine, error) {
@@ -173,7 +202,7 @@ func NewEngine(baseDir string) (*engine, error) {
 		return nil, err
 	}
 
-	ps := make([]*Post, len(fs))
+	ps := make([]*Page, len(fs))
 	for i, f := range fs {
 		p, err := parse(path.Join(postsDir, f.Name()))
 		if err != nil {
@@ -190,21 +219,21 @@ func NewEngine(baseDir string) (*engine, error) {
 	}, nil
 }
 
-func (e *engine) context(p *Post) GlobalContext {
-	pcs := make([]*PostContext, len(e.posts))
+func (e *engine) context(p *Page) GlobalContext {
+	pcs := make([]*PageContext, len(e.posts))
 	for i, p := range e.posts {
 		pcs[i] = p.AsContext()
 	}
 
-	var postContext *PostContext
+	var pageContext *PageContext
 	if p != nil {
-		postContext = p.AsContext()
+		pageContext = p.AsContext()
 	}
 
 	return GlobalContext{
 		Site:  e.site,
 		Posts: pcs,
-		Post:  postContext,
+		Page:  pageContext,
 	}
 }
 
@@ -222,11 +251,15 @@ func (e *engine) layoutPath(name string) string {
 
 func (e *engine) Template(layout string) (*template.Template, error) {
 	funcs := map[string]interface{}{
-		"upper": upper,
+		"upper":         upper,
+		"static":        static,
+		"date":          date,
+		"truncateWords": truncateWords,
+		"stripHtml":     stripHtml,
 	}
 
-	return template.New("layout").Funcs(funcs).ParseFiles(
-		e.layoutPath("default"),
+	return template.New("main").Funcs(funcs).ParseFiles(
+		e.path("layout.tmpl"),
 		layout,
 	)
 }
@@ -257,7 +290,7 @@ func (e *engine) writeIndex() error {
 	return nil
 }
 
-func (e *engine) writePost(p *Post) error {
+func (e *engine) writePost(p *Page) error {
 	t, err := e.Template(e.layoutPath(p.Layout))
 	if err != nil {
 		return err
@@ -283,6 +316,12 @@ func (e *engine) writePost(p *Post) error {
 
 	return nil
 }
+
+func (e *engine) writeStaticFiles() error {
+	dst := path.Join("out", "static")
+	return copy.Dir(e.path("static"), dst)
+}
+
 func (e *engine) run() error {
 	err := e.writeIndex()
 	if err != nil {
@@ -294,6 +333,11 @@ func (e *engine) run() error {
 		if err != nil {
 			return err
 		}
+	}
+
+	err = e.writeStaticFiles()
+	if err != nil {
+		return err
 	}
 
 	return nil
