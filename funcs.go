@@ -22,6 +22,7 @@ func stripHtml(value template.HTML) string {
 }
 
 func truncateWords(len int, value string) (string, error) {
+	eof := false
 	s := bufio.NewScanner(strings.NewReader(value))
 	s.Split(bufio.ScanWords)
 
@@ -31,7 +32,7 @@ func truncateWords(len int, value string) (string, error) {
 		if !s.Scan() {
 			err := s.Err()
 			if err == nil {
-				// EOF
+				eof = true
 				break
 			}
 
@@ -43,6 +44,10 @@ func truncateWords(len int, value string) (string, error) {
 	}
 
 	res := strings.Join(words, " ")
+	if !eof {
+		res += "..."
+	}
+
 	return res, nil
 }
 

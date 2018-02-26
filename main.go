@@ -19,8 +19,14 @@ import (
 )
 
 type Site struct {
-	Name    string
-	Content template.HTML
+	Title       string                 `yaml:"title"`
+	Description string                 `yaml:"description"`
+	Author      string                 `yaml:"author"`
+	Vars        map[string]interface{} `yaml:"vars"`
+}
+
+type Config struct {
+	Site Site `yaml:"site"`
 }
 
 type Page struct {
@@ -63,6 +69,8 @@ func parse(filename string) (*Page, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	defer f.Close()
 
 	r := bufio.NewReader(f)
 	fm, err := parseFrontMatter(r)
@@ -132,7 +140,7 @@ type GlobalContext struct {
 }
 
 type SiteContext struct {
-	Name        string
+	Title       string
 	Description string
 	Author      string
 	Time        time.Time
@@ -149,7 +157,17 @@ type PageContext struct {
 	Content template.HTML
 }
 
-func (p *Page) AsContext() *PageContext {
+func NewSiteContext(s *Site) *SiteContext {
+	return &SiteContext{
+		Title:       s.Title,
+		Description: s.Description,
+		Author:      s.Author,
+		Vars:        s.Vars,
+		Time:        time.Now(),
+	}
+}
+
+func NewPageContext(p *Page) *PageContext {
 	slug := p.Slug()
 	opt := blackfriday.WithExtensions(blackfriday.CommonExtensions)
 	markdown := blackfriday.Run(p.Content, opt)
@@ -176,13 +194,30 @@ type engine struct {
 	posts   []*Page
 }
 
+func readConfig(filename string) (*Config, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	defer f.Close()
+
+	cfg := new(Config)
+	err = yaml.NewDecoder(f).Decode(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
 func NewEngine(baseDir string) (*engine, error) {
 	dir := path.Join(baseDir, "site")
 	postsDir := path.Join(dir, "posts")
 
-	site := &SiteContext{
-		Name: "Test Site",
-		Time: time.Now(),
+	cfg, err := readConfig(path.Join(dir, "banana.yml"))
+	if err != nil {
+		return nil, err
 	}
 
 	fs, err := ioutil.ReadDir(postsDir)
@@ -202,7 +237,7 @@ func NewEngine(baseDir string) (*engine, error) {
 
 	return &engine{
 		baseDir: dir,
-		site:    site,
+		site:    NewSiteContext(&cfg.Site),
 		posts:   ps,
 	}, nil
 }
@@ -210,12 +245,12 @@ func NewEngine(baseDir string) (*engine, error) {
 func (e *engine) context(p *Page) GlobalContext {
 	pcs := make([]*PageContext, len(e.posts))
 	for i, p := range e.posts {
-		pcs[i] = p.AsContext()
+		pcs[i] = NewPageContext(p)
 	}
 
 	var pageContext *PageContext
 	if p != nil {
-		pageContext = p.AsContext()
+		pageContext = NewPageContext(p)
 	}
 
 	return GlobalContext{
