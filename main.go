@@ -23,48 +23,6 @@ type Site struct {
 	Content template.HTML
 }
 
-func upper(value string) string {
-	return value + "SDIANSDKANS"
-}
-
-func static(value string) string {
-	return "/static/" + value
-}
-
-func date(format string, t *time.Time) string {
-	return t.Format(format)
-}
-
-func stripHtml(value template.HTML) string {
-	re := regexp.MustCompile("</?[^>]*>")
-	return re.ReplaceAllLiteralString(string(value), "")
-}
-
-func truncateWords(len int, value string) (string, error) {
-	s := bufio.NewScanner(strings.NewReader(value))
-	s.Split(bufio.ScanWords)
-
-	i := 0
-	words := make([]string, len)
-	for i < len {
-		if !s.Scan() {
-			err := s.Err()
-			if err == nil {
-				// EOF
-				break
-			}
-
-			return "", err
-		}
-
-		words[i] = s.Text()
-		i += 1
-	}
-
-	res := strings.Join(words, " ")
-	return res, nil
-}
-
 type Page struct {
 	FrontMatter
 	Content []byte
@@ -279,15 +237,7 @@ func (e *engine) layoutPath(name string) string {
 }
 
 func (e *engine) Template(layout string) (*template.Template, error) {
-	funcs := map[string]interface{}{
-		"upper":         upper,
-		"static":        static,
-		"date":          date,
-		"truncateWords": truncateWords,
-		"stripHtml":     stripHtml,
-	}
-
-	return template.New("main").Funcs(funcs).ParseFiles(
+	return template.New("main").Funcs(funcMap).ParseFiles(
 		e.path("layout.tmpl"),
 		layout,
 	)
