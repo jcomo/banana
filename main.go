@@ -151,7 +151,8 @@ type PageContext struct {
 
 func (p *Page) AsContext() *PageContext {
 	slug := p.Slug()
-	markdown := blackfriday.Run(p.Content)
+	opt := blackfriday.WithExtensions(blackfriday.CommonExtensions)
+	markdown := blackfriday.Run(p.Content, opt)
 	return &PageContext{
 		URL:     "/posts/" + slug, // FIXME
 		Slug:    slug,
