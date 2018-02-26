@@ -79,6 +79,8 @@ func (p *Page) Slug() string {
 type FrontMatter struct {
 	Layout string     `yaml:"layout"`
 	Title  string     `yaml:"title"`
+	Author string     `yaml:"author"`
+	Meta   string     `yaml:"meta"`
 	Date   *time.Time `yaml:"date"`
 }
 
@@ -184,6 +186,8 @@ type PageContext struct {
 	Slug    string
 	Date    *time.Time
 	Title   string
+	Author  string
+	Meta    string
 	Content template.HTML
 }
 
