@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -246,6 +247,7 @@ func (e *engine) context(p *Page) GlobalContext {
 	for i, p := range e.posts {
 		pcs[i] = NewPageContext(p)
 	}
+	sort.Sort(pagesByDate(pcs))
 
 	var pageContext *PageContext
 	if p != nil {
