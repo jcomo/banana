@@ -8,7 +8,7 @@ import (
 
 var cleanCommand *Command
 
-func cleanArgs(f *flag.FlagSet) {
+func cleanArgs(fs *flag.FlagSet) {
 }
 
 func cleanRun() error {

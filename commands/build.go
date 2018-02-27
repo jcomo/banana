@@ -10,16 +10,25 @@ var buildCommand *Command
 
 var (
 	buildVerbose bool
+	buildClean   bool
 )
 
-func buildArgs(f *flag.FlagSet) {
-	f.BoolVar(&buildVerbose, "verbose", false, "print debug output")
+func buildArgs(fs *flag.FlagSet) {
+	fs.BoolVar(&buildVerbose, "verbose", false, "print debug output")
+	fs.BoolVar(&buildClean, "clean", false, "cleans before building")
 }
 
 func buildRun() error {
 	e, err := banana.NewEngine()
 	if err != nil {
 		return err
+	}
+
+	if buildClean {
+		err = e.Clean()
+		if err != nil {
+			return err
+		}
 	}
 
 	return e.Build()

@@ -28,6 +28,7 @@ func loadCommands() {
 	addCommand(buildCommand)
 	addCommand(cleanCommand)
 	addCommand(helpCommand)
+	addCommand(serveCommand)
 }
 
 func printHelp() {

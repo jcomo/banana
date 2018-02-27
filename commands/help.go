@@ -6,7 +6,7 @@ import (
 
 var helpCommand *Command
 
-func helpArgs(f *flag.FlagSet) {
+func helpArgs(fs *flag.FlagSet) {
 }
 
 func helpRun() error {
