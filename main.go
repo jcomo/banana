@@ -1,4 +1,4 @@
-package main
+package banana
 
 import (
 	"bufio"
@@ -190,6 +190,7 @@ func init() {
 
 type engine struct {
 	baseDir string
+	outDir  string
 	site    *SiteContext
 	posts   []*Page
 }
@@ -211,8 +212,8 @@ func readConfig(filename string) (*Config, error) {
 	return cfg, nil
 }
 
-func NewEngine(baseDir string) (*engine, error) {
-	dir := path.Join(baseDir, "site")
+func NewEngine() (*engine, error) {
+	dir := "."
 	postsDir := path.Join(dir, "posts")
 
 	cfg, err := readConfig(path.Join(dir, "banana.yml"))
@@ -237,6 +238,7 @@ func NewEngine(baseDir string) (*engine, error) {
 
 	return &engine{
 		baseDir: dir,
+		outDir:  "_build",
 		site:    NewSiteContext(&cfg.Site),
 		posts:   ps,
 	}, nil
@@ -286,12 +288,13 @@ func (e *engine) writeIndex() error {
 		return err
 	}
 
-	err = os.MkdirAll("out", 0755)
+	err = os.MkdirAll(e.outDir, 0755)
 	if err != nil {
 		return err
 	}
 
-	f, err := os.Create("out/index.html")
+	path := path.Join(e.outDir, "index.html")
+	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
@@ -312,7 +315,7 @@ func (e *engine) writePost(p *Page) error {
 		return err
 	}
 
-	dir := path.Join("out", p.Slug())
+	dir := path.Join(e.outDir, p.Slug())
 	err = os.MkdirAll(dir, 0755)
 	if err != nil {
 		return err
@@ -334,11 +337,16 @@ func (e *engine) writePost(p *Page) error {
 }
 
 func (e *engine) writeStaticFiles() error {
-	dst := path.Join("out", "static")
+	dst := path.Join(e.outDir, "static")
+	err := os.RemoveAll(dst)
+	if err != nil {
+		return nil
+	}
+
 	return copy.Dir(e.path("static"), dst)
 }
 
-func (e *engine) run() error {
+func (e *engine) Build() error {
 	err := e.writeIndex()
 	if err != nil {
 		return err
@@ -359,14 +367,6 @@ func (e *engine) run() error {
 	return nil
 }
 
-func main() {
-	e, err := NewEngine("example")
-	if err != nil {
-		panic(err)
-	}
-
-	err = e.run()
-	if err != nil {
-		panic(err)
-	}
+func (e *engine) Clean() error {
+	return os.RemoveAll(e.outDir)
 }
