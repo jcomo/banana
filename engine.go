@@ -27,14 +27,14 @@ var (
 	layoutTemplateName = "layout.tmpl"
 )
 
-type engine struct {
+type Engine struct {
 	baseDir string
 	outDir  string
 	site    *SiteContext
 	posts   []*Page
 }
 
-func NewEngine() (*engine, error) {
+func NewEngine() (*Engine, error) {
 	dir := "."
 	postsPath := path.Join(dir, postsDir)
 
@@ -58,7 +58,7 @@ func NewEngine() (*engine, error) {
 		ps[i] = p
 	}
 
-	return &engine{
+	return &Engine{
 		baseDir: dir,
 		outDir:  "_build",
 		site:    NewSiteContext(&cfg.Site),
@@ -66,7 +66,7 @@ func NewEngine() (*engine, error) {
 	}, nil
 }
 
-func (e *engine) context(p *Page) GlobalContext {
+func (e *Engine) context(p *Page) GlobalContext {
 	pcs := make([]*PageContext, len(e.posts))
 	for i, p := range e.posts {
 		pcs[i] = NewPageContext(p)
@@ -85,26 +85,26 @@ func (e *engine) context(p *Page) GlobalContext {
 	}
 }
 
-func (e *engine) path(name string) string {
+func (e *Engine) path(name string) string {
 	return path.Join(e.baseDir, name)
 }
 
-func (e *engine) postPath(name string) string {
+func (e *Engine) postPath(name string) string {
 	return path.Join(e.baseDir, postsDir, name)
 }
 
-func (e *engine) layoutPath(name string) string {
+func (e *Engine) layoutPath(name string) string {
 	return path.Join(e.baseDir, layoutsDir, name+".tmpl")
 }
 
-func (e *engine) Template(layout string) (*template.Template, error) {
+func (e *Engine) Template(layout string) (*template.Template, error) {
 	return template.New("main").Funcs(funcMap).ParseFiles(
 		e.path(layoutTemplateName),
 		layout,
 	)
 }
 
-func (e *engine) writeIndex() error {
+func (e *Engine) writeIndex() error {
 	t, err := e.Template(e.path(indexTemplateName))
 	if err != nil {
 		return err
@@ -131,7 +131,7 @@ func (e *engine) writeIndex() error {
 	return nil
 }
 
-func (e *engine) writePost(p *Page) error {
+func (e *Engine) writePost(p *Page) error {
 	t, err := e.Template(e.layoutPath(p.Layout))
 	if err != nil {
 		return err
@@ -158,7 +158,7 @@ func (e *engine) writePost(p *Page) error {
 	return nil
 }
 
-func (e *engine) writeStaticFiles() error {
+func (e *Engine) writeStaticFiles() error {
 	dst := path.Join(e.outDir, staticDir)
 	err := os.RemoveAll(dst)
 	if err != nil {
@@ -168,7 +168,7 @@ func (e *engine) writeStaticFiles() error {
 	return copy.Dir(e.path(staticDir), dst)
 }
 
-func (e *engine) Build() error {
+func (e *Engine) Build() error {
 	err := e.writeIndex()
 	if err != nil {
 		return err
@@ -189,11 +189,11 @@ func (e *engine) Build() error {
 	return nil
 }
 
-func (e *engine) Clean() error {
+func (e *Engine) Clean() error {
 	return os.RemoveAll(e.outDir)
 }
 
-func (e *engine) Watch() (io.Closer, error) {
+func (e *Engine) Watch() (io.Closer, error) {
 	dirs := []string{
 		e.baseDir,
 		e.path(layoutsDir),
@@ -215,7 +215,7 @@ func (e *engine) Watch() (io.Closer, error) {
 	return StartWatching(dirs, e)
 }
 
-func (e *engine) OnChange() error {
+func (e *Engine) OnChange() error {
 	log.Println("Change detected. Rebuilding...")
 	err := e.Build()
 	if err != nil {
@@ -226,7 +226,7 @@ func (e *engine) OnChange() error {
 	return nil
 }
 
-func (e *engine) Serve(port int) error {
+func (e *Engine) Serve(port int) error {
 	addr := fmt.Sprintf(":%d", port)
 	handler := http.FileServer(http.Dir(e.outDir))
 	return http.ListenAndServe(addr, withAccessLog(handler))
