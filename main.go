@@ -7,8 +7,10 @@ import (
 	"html/template"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -189,8 +191,8 @@ func init() {
 }
 
 type engine struct {
-	baseDir string
-	outDir  string
+	BaseDir string
+	OutDir  string
 	site    *SiteContext
 	posts   []*Page
 }
@@ -237,8 +239,8 @@ func NewEngine() (*engine, error) {
 	}
 
 	return &engine{
-		baseDir: dir,
-		outDir:  "_build",
+		BaseDir: dir,
+		OutDir:  "_build",
 		site:    NewSiteContext(&cfg.Site),
 		posts:   ps,
 	}, nil
@@ -264,15 +266,15 @@ func (e *engine) context(p *Page) GlobalContext {
 }
 
 func (e *engine) path(name string) string {
-	return path.Join(e.baseDir, name)
+	return path.Join(e.BaseDir, name)
 }
 
 func (e *engine) postPath(name string) string {
-	return path.Join(e.baseDir, "posts", name)
+	return path.Join(e.BaseDir, "posts", name)
 }
 
 func (e *engine) layoutPath(name string) string {
-	return path.Join(e.baseDir, "layouts", name+".tmpl")
+	return path.Join(e.BaseDir, "layouts", name+".tmpl")
 }
 
 func (e *engine) Template(layout string) (*template.Template, error) {
@@ -288,12 +290,12 @@ func (e *engine) writeIndex() error {
 		return err
 	}
 
-	err = os.MkdirAll(e.outDir, 0755)
+	err = os.MkdirAll(e.OutDir, 0755)
 	if err != nil {
 		return err
 	}
 
-	path := path.Join(e.outDir, "index.html")
+	path := path.Join(e.OutDir, "index.html")
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -315,7 +317,7 @@ func (e *engine) writePost(p *Page) error {
 		return err
 	}
 
-	dir := path.Join(e.outDir, p.Slug())
+	dir := path.Join(e.OutDir, p.Slug())
 	err = os.MkdirAll(dir, 0755)
 	if err != nil {
 		return err
@@ -337,7 +339,7 @@ func (e *engine) writePost(p *Page) error {
 }
 
 func (e *engine) writeStaticFiles() error {
-	dst := path.Join(e.outDir, "static")
+	dst := path.Join(e.OutDir, "static")
 	err := os.RemoveAll(dst)
 	if err != nil {
 		return nil
@@ -368,5 +370,37 @@ func (e *engine) Build() error {
 }
 
 func (e *engine) Clean() error {
-	return os.RemoveAll(e.outDir)
+	return os.RemoveAll(e.OutDir)
+}
+
+func (e *engine) Watch() (io.Closer, error) {
+	dirs := []string{
+		e.BaseDir,
+		path.Join(e.BaseDir, "layouts"),
+		path.Join(e.BaseDir, "posts"),
+		path.Join(e.BaseDir, "pages"),
+	}
+
+	staticDir := path.Join(e.BaseDir, "static")
+	filepath.Walk(staticDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		dirs = append(dirs, path)
+		return nil
+	})
+
+	return StartWatching(dirs, e)
+}
+
+func (e *engine) OnChange() error {
+	log.Println("Change detected. Rebuilding...")
+	err := e.Build()
+	if err != nil {
+		return err
+	}
+
+	log.Println("Rebuild complete")
+	return nil
 }

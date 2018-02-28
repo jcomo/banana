@@ -3,6 +3,7 @@ package commands
 import (
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -15,6 +16,7 @@ var serveCommand *Command
 var (
 	servePort  int
 	serveClean bool
+	serveWatch bool
 )
 
 type loggingResponseWriter struct {
@@ -48,13 +50,14 @@ func logAccess(next http.Handler) http.Handler {
 		}
 
 		code := strconv.Itoa(lrw.statusCode)
-		fmt.Printf("%s %s %s\n", chalk(code), white(r.Method), r.RequestURI)
+		log.Printf("%s %s %s\n", chalk(code), white(r.Method), r.RequestURI)
 	})
 }
 
 func serveArgs(fs *flag.FlagSet) {
 	fs.IntVar(&servePort, "port", 4000, "The port to serve on")
 	fs.BoolVar(&serveClean, "clean", false, "Clean before building")
+	fs.BoolVar(&serveWatch, "watch", false, "Watch for file changes")
 }
 
 func serveRun() error {
@@ -69,10 +72,20 @@ func serveRun() error {
 	}
 
 	addr := fmt.Sprintf(":%d", servePort)
-	handler := http.FileServer(http.Dir("_build"))
+	handler := http.FileServer(http.Dir(e.OutDir))
 
 	magenta := color.New(color.FgMagenta).SprintFunc()
-	fmt.Printf("Serving your site on %s!\n", magenta(addr))
+	log.Printf("Serving your site on %s!\n", magenta(addr))
+
+	if serveWatch {
+		closer, err := e.Watch()
+		if err != nil {
+			return err
+		}
+
+		log.Println("Watching for file changes...")
+		defer closer.Close()
+	}
 
 	return http.ListenAndServe(addr, logAccess(handler))
 }
