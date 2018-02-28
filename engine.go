@@ -13,6 +13,18 @@ import (
 	"github.com/jcomo/banana/copy"
 )
 
+var (
+	postsDir   = "posts"
+	pagesDir   = "pages"
+	layoutsDir = "layouts"
+	staticDir  = "static"
+
+	configName = "banana.yml"
+
+	indexTemplateName  = "index.tmpl"
+	layoutTemplateName = "layout.tmpl"
+)
+
 type engine struct {
 	BaseDir string
 	OutDir  string
@@ -22,21 +34,21 @@ type engine struct {
 
 func NewEngine() (*engine, error) {
 	dir := "."
-	postsDir := path.Join(dir, "posts")
+	postsPath := path.Join(dir, postsDir)
 
-	cfg, err := readConfig(path.Join(dir, "banana.yml"))
+	cfg, err := ReadConfig(path.Join(dir, configName))
 	if err != nil {
 		return nil, err
 	}
 
-	fs, err := ioutil.ReadDir(postsDir)
+	fs, err := ioutil.ReadDir(postsPath)
 	if err != nil {
 		return nil, err
 	}
 
 	ps := make([]*Page, len(fs))
 	for i, f := range fs {
-		p, err := ParsePage(path.Join(postsDir, f.Name()))
+		p, err := ParsePage(path.Join(postsPath, f.Name()))
 		if err != nil {
 			return nil, err
 		}
@@ -76,22 +88,22 @@ func (e *engine) path(name string) string {
 }
 
 func (e *engine) postPath(name string) string {
-	return path.Join(e.BaseDir, "posts", name)
+	return path.Join(e.BaseDir, postsDir, name)
 }
 
 func (e *engine) layoutPath(name string) string {
-	return path.Join(e.BaseDir, "layouts", name+".tmpl")
+	return path.Join(e.BaseDir, layoutsDir, name+".tmpl")
 }
 
 func (e *engine) Template(layout string) (*template.Template, error) {
 	return template.New("main").Funcs(funcMap).ParseFiles(
-		e.path("layout.tmpl"),
+		e.path(layoutTemplateName),
 		layout,
 	)
 }
 
 func (e *engine) writeIndex() error {
-	t, err := e.Template(e.path("index.tmpl"))
+	t, err := e.Template(e.path(indexTemplateName))
 	if err != nil {
 		return err
 	}
@@ -145,13 +157,13 @@ func (e *engine) writePost(p *Page) error {
 }
 
 func (e *engine) writeStaticFiles() error {
-	dst := path.Join(e.OutDir, "static")
+	dst := path.Join(e.OutDir, staticDir)
 	err := os.RemoveAll(dst)
 	if err != nil {
 		return nil
 	}
 
-	return copy.Dir(e.path("static"), dst)
+	return copy.Dir(e.path(staticDir), dst)
 }
 
 func (e *engine) Build() error {
@@ -182,20 +194,21 @@ func (e *engine) Clean() error {
 func (e *engine) Watch() (io.Closer, error) {
 	dirs := []string{
 		e.BaseDir,
-		path.Join(e.BaseDir, "layouts"),
-		path.Join(e.BaseDir, "posts"),
-		path.Join(e.BaseDir, "pages"),
+		e.path(layoutsDir),
+		e.path(postsDir),
+		e.path(pagesDir),
 	}
 
-	staticDir := path.Join(e.BaseDir, "static")
-	filepath.Walk(staticDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
+	filepath.Walk(
+		e.path(staticDir),
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
 
-		dirs = append(dirs, path)
-		return nil
-	})
+			dirs = append(dirs, path)
+			return nil
+		})
 
 	return StartWatching(dirs, e)
 }

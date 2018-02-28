@@ -17,7 +17,7 @@ type Config struct {
 	Site Site `yaml:"site"`
 }
 
-func readConfig(filename string) (*Config, error) {
+func ReadConfig(filename string) (*Config, error) {
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, err
