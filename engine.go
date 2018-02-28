@@ -1,10 +1,12 @@
 package banana
 
 import (
+	"fmt"
 	"html/template"
 	"io"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -26,8 +28,8 @@ var (
 )
 
 type engine struct {
-	BaseDir string
-	OutDir  string
+	baseDir string
+	outDir  string
 	site    *SiteContext
 	posts   []*Page
 }
@@ -57,8 +59,8 @@ func NewEngine() (*engine, error) {
 	}
 
 	return &engine{
-		BaseDir: dir,
-		OutDir:  "_build",
+		baseDir: dir,
+		outDir:  "_build",
 		site:    NewSiteContext(&cfg.Site),
 		posts:   ps,
 	}, nil
@@ -84,15 +86,15 @@ func (e *engine) context(p *Page) GlobalContext {
 }
 
 func (e *engine) path(name string) string {
-	return path.Join(e.BaseDir, name)
+	return path.Join(e.baseDir, name)
 }
 
 func (e *engine) postPath(name string) string {
-	return path.Join(e.BaseDir, postsDir, name)
+	return path.Join(e.baseDir, postsDir, name)
 }
 
 func (e *engine) layoutPath(name string) string {
-	return path.Join(e.BaseDir, layoutsDir, name+".tmpl")
+	return path.Join(e.baseDir, layoutsDir, name+".tmpl")
 }
 
 func (e *engine) Template(layout string) (*template.Template, error) {
@@ -108,12 +110,12 @@ func (e *engine) writeIndex() error {
 		return err
 	}
 
-	err = os.MkdirAll(e.OutDir, 0755)
+	err = os.MkdirAll(e.outDir, 0755)
 	if err != nil {
 		return err
 	}
 
-	path := path.Join(e.OutDir, "index.html")
+	path := path.Join(e.outDir, "index.html")
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -135,7 +137,7 @@ func (e *engine) writePost(p *Page) error {
 		return err
 	}
 
-	dir := path.Join(e.OutDir, p.Slug())
+	dir := path.Join(e.outDir, p.Slug())
 	err = os.MkdirAll(dir, 0755)
 	if err != nil {
 		return err
@@ -157,7 +159,7 @@ func (e *engine) writePost(p *Page) error {
 }
 
 func (e *engine) writeStaticFiles() error {
-	dst := path.Join(e.OutDir, staticDir)
+	dst := path.Join(e.outDir, staticDir)
 	err := os.RemoveAll(dst)
 	if err != nil {
 		return nil
@@ -188,12 +190,12 @@ func (e *engine) Build() error {
 }
 
 func (e *engine) Clean() error {
-	return os.RemoveAll(e.OutDir)
+	return os.RemoveAll(e.outDir)
 }
 
 func (e *engine) Watch() (io.Closer, error) {
 	dirs := []string{
-		e.BaseDir,
+		e.baseDir,
 		e.path(layoutsDir),
 		e.path(postsDir),
 		e.path(pagesDir),
@@ -222,4 +224,10 @@ func (e *engine) OnChange() error {
 
 	log.Println("Rebuild complete")
 	return nil
+}
+
+func (e *engine) Serve(port int) error {
+	addr := fmt.Sprintf(":%d", port)
+	handler := http.FileServer(http.Dir(e.outDir))
+	return http.ListenAndServe(addr, withAccessLog(handler))
 }
