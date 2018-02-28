@@ -1,7 +1,6 @@
 package banana
 
 import (
-	"fmt"
 	"html/template"
 	"io"
 	"io/ioutil"
@@ -226,8 +225,7 @@ func (e *Engine) OnChange() error {
 	return nil
 }
 
-func (e *Engine) Serve(port int) error {
-	addr := fmt.Sprintf(":%d", port)
+func (e *Engine) Serve(addr string) error {
 	handler := http.FileServer(http.Dir(e.outDir))
 	return http.ListenAndServe(addr, withAccessLog(handler))
 }
