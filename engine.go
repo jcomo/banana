@@ -35,33 +35,15 @@ type Engine struct {
 
 func NewEngine() (*Engine, error) {
 	dir := "."
-	postsPath := path.Join(dir, postsDir)
-
 	cfg, err := ReadConfig(path.Join(dir, configName))
 	if err != nil {
 		return nil, err
-	}
-
-	fs, err := ioutil.ReadDir(postsPath)
-	if err != nil {
-		return nil, err
-	}
-
-	ps := make([]*Page, len(fs))
-	for i, f := range fs {
-		p, err := ParsePage(path.Join(postsPath, f.Name()))
-		if err != nil {
-			return nil, err
-		}
-
-		ps[i] = p
 	}
 
 	return &Engine{
 		baseDir: dir,
 		outDir:  "_build",
 		site:    NewSiteContext(&cfg.Site),
-		posts:   ps,
 	}, nil
 }
 
@@ -101,6 +83,26 @@ func (e *Engine) Template(layout string) (*template.Template, error) {
 		e.path(layoutTemplateName),
 		layout,
 	)
+}
+
+func (e *Engine) readPosts() error {
+	fs, err := ioutil.ReadDir(e.path(postsDir))
+	if err != nil {
+		return err
+	}
+
+	ps := make([]*Page, len(fs))
+	for i, f := range fs {
+		p, err := ParsePage(e.postPath(f.Name()))
+		if err != nil {
+			return err
+		}
+
+		ps[i] = p
+	}
+
+	e.posts = ps
+	return nil
 }
 
 func (e *Engine) writeIndex() error {
@@ -168,7 +170,12 @@ func (e *Engine) writeStaticFiles() error {
 }
 
 func (e *Engine) Build() error {
-	err := e.writeIndex()
+	err := e.readPosts()
+	if err != nil {
+		return err
+	}
+
+	err = e.writeIndex()
 	if err != nil {
 		return err
 	}
