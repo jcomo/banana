@@ -132,7 +132,7 @@ func (e *Engine) writeIndex() error {
 	return nil
 }
 
-func (e *Engine) writePost(p *Page) error {
+func (e *Engine) writePage(p *Page) error {
 	t, err := e.Template(e.layoutPath(p.Layout))
 	if err != nil {
 		return err
@@ -144,6 +144,7 @@ func (e *Engine) writePost(p *Page) error {
 		return err
 	}
 
+	// TODO: check for naming collisions
 	f, err := os.Create(path.Join(dir, "index.html"))
 	if err != nil {
 		return err
@@ -181,10 +182,33 @@ func (e *Engine) Build() error {
 	}
 
 	for _, p := range e.posts {
-		err = e.writePost(p)
+		err = e.writePage(p)
 		if err != nil {
 			return err
 		}
+	}
+
+	err = filepath.Walk(
+		e.path(pagesDir),
+		func(path string, info os.FileInfo, err error) error {
+			if info.IsDir() {
+				return nil
+			}
+
+			if err != nil {
+				return err
+			}
+
+			p, err := ParsePage(path)
+			if err != nil {
+				return err
+			}
+
+			return e.writePage(p)
+		})
+
+	if err != nil {
+		return err
 	}
 
 	err = e.writeStaticFiles()
