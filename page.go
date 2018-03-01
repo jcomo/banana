@@ -23,17 +23,22 @@ type Page struct {
 }
 
 func (p *Page) Slug() string {
+	if p.Permalink != "" {
+		return strings.Trim(p.Permalink, "/")
+	}
+
 	re := regexp.MustCompile("[\\W]+")
 	title := strings.ToLower(p.Title)
 	return re.ReplaceAllLiteralString(title, "-")
 }
 
 type FrontMatter struct {
-	Layout string     `yaml:"layout"`
-	Title  string     `yaml:"title"`
-	Author string     `yaml:"author"`
-	Meta   string     `yaml:"meta"`
-	Date   *time.Time `yaml:"date"`
+	Layout    string     `yaml:"layout"`
+	Permalink string     `yaml:"permalink"`
+	Title     string     `yaml:"title"`
+	Author    string     `yaml:"author"`
+	Meta      string     `yaml:"meta"`
+	Date      *time.Time `yaml:"date"`
 }
 
 type FrontMatterParser interface {
