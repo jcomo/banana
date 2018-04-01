@@ -3,8 +3,8 @@ package banana
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"io"
+	"io/ioutil"
 	"os"
 	"regexp"
 	"strings"
@@ -65,13 +65,7 @@ func ParsePage(filename string) (*Page, error) {
 
 	defer f.Close()
 
-	r := bufio.NewReader(f)
-	fm, err := parseFrontMatter(r)
-	if err != nil {
-		return nil, err
-	}
-
-	content, err := parseContent(r)
+	fm, content, err := parse(f)
 	if err != nil {
 		return nil, err
 	}
@@ -82,23 +76,29 @@ func ParsePage(filename string) (*Page, error) {
 	}, nil
 }
 
-func parseFrontMatter(r *bufio.Reader) (*FrontMatter, error) {
+func parse(r io.ReadSeeker) (*FrontMatter, []byte, error) {
 	var buf bytes.Buffer
-	line, err := r.ReadString('\n')
+	br := bufio.NewReader(r)
+
+	// Start by parsing the front matter
+	line, err := br.ReadString('\n')
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	delimiter := strings.Trim(line, "\r\n")
 	parser, ok := parsers[delimiter]
 	if !ok {
-		return nil, errors.New("Invalid front matter delimiter")
+		// No front matter, rewind and read the whole thing
+		r.Seek(0, io.SeekStart)
+		content, err := ioutil.ReadAll(r)
+		return nil, content, err
 	}
 
 	for {
-		line, err = r.ReadString('\n')
+		line, err = br.ReadString('\n')
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		if strings.Trim(line, "\r\n") == delimiter {
@@ -110,20 +110,16 @@ func parseFrontMatter(r *bufio.Reader) (*FrontMatter, error) {
 
 	fm, err := parser.Parse(buf.Bytes())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return fm, nil
-}
-
-func parseContent(r *bufio.Reader) ([]byte, error) {
-	var buf bytes.Buffer
-	_, err := io.Copy(&buf, r)
+	// Now parse the content after the front matter
+	content, err := ioutil.ReadAll(br)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return buf.Bytes(), nil
+	return fm, content, nil
 }
 
 func init() {

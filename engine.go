@@ -22,8 +22,7 @@ var (
 
 	configName = "banana.yml"
 
-	indexTemplateName  = "index.tmpl"
-	layoutTemplateName = "layout.tmpl"
+	indexTemplateName = "index.tmpl"
 )
 
 type Engine struct {
@@ -79,10 +78,44 @@ func (e *Engine) layoutPath(name string) string {
 }
 
 func (e *Engine) Template(layout string) (*template.Template, error) {
-	return template.New("main").Funcs(funcMap).ParseFiles(
-		e.path(layoutTemplateName),
-		layout,
-	)
+	baseTemplate := ""
+	templatePath := layout
+	templates := make([]string, 0)
+
+	for {
+		f, err := os.Open(templatePath)
+		if err != nil {
+			return nil, err
+		}
+
+		defer f.Close()
+
+		// TODO: split out frontmatter parsing
+		fm, content, err := parse(f)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO: check for infinite loop
+		templates = append(templates, string(content))
+		if fm == nil || fm.Layout == "" {
+			// At the base template for this render
+			baseTemplate = path.Base(templatePath)
+			break
+		}
+
+		templatePath = e.layoutPath(fm.Layout)
+	}
+
+	t := template.New(baseTemplate).Funcs(funcMap)
+	for _, text := range templates {
+		_, err := t.Parse(text)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return t, nil
 }
 
 func (e *Engine) readPosts() error {
