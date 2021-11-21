@@ -4,7 +4,7 @@ import (
 	"html/template"
 	"time"
 
-	"gopkg.in/russross/blackfriday.v2"
+	blackfriday "github.com/russross/blackfriday/v2"
 )
 
 type GlobalContext struct {
