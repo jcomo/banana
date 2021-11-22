@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/jcomo/banana/copy"
 )
@@ -100,7 +101,8 @@ func (e *Engine) Template(layout string) (*template.Template, error) {
 		templates = append(templates, string(content))
 		if fm == nil || fm.Layout == "" {
 			// At the base template for this render
-			baseTemplate = path.Base(templatePath)
+			b := path.Base(templatePath)
+			baseTemplate = strings.TrimSuffix(b, filepath.Ext(b))
 			break
 		}
 
